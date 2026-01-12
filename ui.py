@@ -151,17 +151,18 @@ class UI:
         y_offset += 20
 
         # Controls
-        y_offset += 360
+        y_offset += 350
 
         controls = [
             "ESC: Quit",
             "SPACE: Pause",
+            "Ctrl+R: Restart",
         ]
 
         for control in controls:
             control_text = self.font_small.render(control, True, config.COLOR_TEXT)
             self.screen.blit(control_text, (panel_x, y_offset))
-            y_offset += 20
+            y_offset += 15
 
     def draw_species_statistics(self, agents: List) -> None:
         """
@@ -604,7 +605,7 @@ class StatisticsPanel:
             # Draw percentage text if enabled
             if config.STATS_SHOW_PERCENTAGES:
                 percentage_text = self.font_tiny.render(f"{prob*100:.0f}%", True, (180, 180, 180))
-                self.screen.blit(percentage_text, (bar_x + bar_width_max + 5, bar_y - 2))
+                self.screen.blit(percentage_text, (bar_x + bar_width_max - 5, bar_y - 2))
 
             bar_y += config.STATS_BAR_HEIGHT + config.STATS_BAR_SPACING
 

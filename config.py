@@ -70,9 +70,9 @@ STRATEGY_COLORS = {
 # SIMULATION PARAMETERS
 # ============================================================================
 # Resource spawning
-RESOURCE_SPAWN_INTERVAL = 120  # frames between spawn attempts
-RESOURCE_MAX_PLANT = 50
-RESOURCE_MAX_MEAT = 20
+RESOURCE_SPAWN_INTERVAL = 60  # frames between spawn attempts (increased from 120)
+RESOURCE_MAX_PLANT = 100  # Increased to support population
+RESOURCE_MAX_MEAT = 40  # Increased to support population
 RESOURCE_PLANT_NUTRITION = 30
 RESOURCE_MEAT_NUTRITION = 60
 
@@ -81,11 +81,11 @@ LEARNING_RATE = 0.1  # α for strategy probability updates
 INTERACTION_RADIUS = 80  # pixels - distance for agent interactions
 
 # Agent metabolism
-METABOLISM_RATE = 0.1  # Energy drain per frame
-AGE_INCREMENT = 0.01  # Age units per frame
+METABOLISM_RATE = 0.1667/10  # Energy drain per frame (Chimp depletes in 12 seconds)
+AGE_INCREMENT = 0.022  # 1 frame = 1/45 years (1 year = 0.75 seconds)
 
 # Initial population
-INITIAL_GORILLA_COUNT = 10
+INITIAL_GORILLA_COUNT = 10  # Reduced to prevent overpopulation
 INITIAL_CHIMP_COUNT = 10
 INITIAL_BONOBO_COUNT = 10
 
@@ -97,37 +97,40 @@ SPECIES_CONFIG = {
         'max_hp': 150,
         'max_energy': 100,
         'base_speed': 1.5,
-        'attack_power': 30,
+        'attack_power': 12,  # Reduced from 30 (60% reduction for survivability)
         'defense': 20,
         'view_range': 120,
-        'max_age': 1000,
+        'max_age': 1800,  # 40 years = 30 seconds
         'diet': ['plant'],  # Plant-only
         'social_recovery': 0.5,  # HP recovery from grooming
         'food_requirement': 40,  # High food needs
+        'reproduction_cooldown': 3,  # 2 years (biological age in years)
     },
     'Chimp': {
         'max_hp': 100,
         'max_energy': 120,
         'base_speed': 3.0,
-        'attack_power': 25,
+        'attack_power': 10,  # Reduced from 25 (60% reduction for survivability)
         'defense': 10,
         'view_range': 110,
-        'max_age': 800,
+        'max_age': 1575,  # 35 years = 26.25 seconds
         'diet': ['plant', 'meat'],  # Omnivore
         'social_recovery': 0.3,
         'food_requirement': 30,
+        'reproduction_cooldown': 2,  # 2 years (biological age in years)
     },
     'Bonobo': {
         'max_hp': 80,
         'max_energy': 110,
         'base_speed': 2.5,
-        'attack_power': 15,
+        'attack_power': 6,  # Reduced from 15 (60% reduction for survivability)
         'defense': 15,
         'view_range': 140,
-        'max_age': 900,
+        'max_age': 1800,  # 40 years = 30 seconds
         'diet': ['plant'],  # Plant-only
         'social_recovery': 1.0,  # High social recovery
         'food_requirement': 25,  # Low food needs
+        'reproduction_cooldown': 3,  # 3 years (biological age in years)
     },
 }
 
@@ -145,6 +148,15 @@ FLEE_STRATEGIES = ['Speed', 'Hide', 'Scatter']
 
 # All strategies (for reference)
 ALL_STRATEGIES = FORAGING_STRATEGIES + COMBAT_STRATEGIES + FLEE_STRATEGIES
+
+# ============================================================================
+# REPRODUCTION CONFIGURATION
+# ============================================================================
+MIN_REPRODUCTION_AGE = 12  # 12 years (biological age in years)
+MATING_RANGE = 100  # Distance in pixels for mating
+REPRODUCTION_ENERGY_COST = 0.2  # 20% energy cost for each parent (reduced from 0.3)
+REPRODUCTION_HP_COST = 0.1  # 10% HP cost for each parent (reduced from 0.2)
+MUTATION_RATE = 0.1  # 10% mutation rate for strategy inheritance
 
 # ============================================================================
 # STATISTICS PANEL CONFIGURATION

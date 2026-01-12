@@ -227,8 +227,8 @@ class ConfigScreen:
         button_y = 700
         self.start_button = Button(950, button_y, 150, 50, "START", (50, 150, 50))
         self.reset_button = Button(1120, button_y, 150, 50, "RESET", (150, 50, 50))
-        self.prev_button = Button(50, button_y, 120, 50, "< PREV", (50, 100, 150))
-        self.next_button = Button(180, button_y, 120, 50, "NEXT >", (50, 100, 150))
+        self.prev_button = Button(50, button_y+20, 120, 50, "< PREV", (50, 100, 150))
+        self.next_button = Button(180, button_y+20, 120, 50, "NEXT >", (50, 100, 150))
 
     def _deep_copy_config(self, config_dict: Dict) -> Dict:
         """Deep copy the species config."""
@@ -263,12 +263,18 @@ class ConfigScreen:
             ('max_age', 'Max Age', 500, 2000, True),
             ('social_recovery', 'Social Recovery', 0.0, 2.0, False),
             ('food_requirement', 'Food Requirement', 10, 60, True),
+            ('reproduction_cooldown', 'Reproduction Cooldown (sec)', 10, 120, True),
         ]
 
         y = y_start
         for key, label, min_val, max_val, is_int in slider_defs:
+            # Convert reproduction_cooldown from frames to seconds for display
+            initial_value = species_config[key]
+            if key == 'reproduction_cooldown':
+                initial_value = int(initial_value / 60)  # frames to seconds
+
             slider = Slider(x_start, y, slider_width, label,
-                          min_val, max_val, species_config[key], is_int)
+                          min_val, max_val, initial_value, is_int)
             self.sliders.append((key, slider))
             y += y_spacing
 
@@ -285,7 +291,11 @@ class ConfigScreen:
         """Update current config from slider and checkbox values."""
         # Update from sliders
         for key, slider in self.sliders:
-            self.current_config[self.current_species][key] = slider.value
+            value = slider.value
+            # Convert reproduction_cooldown from seconds to frames (60 FPS)
+            if key == 'reproduction_cooldown':
+                value = int(value * 60)  # seconds to frames
+            self.current_config[self.current_species][key] = value
 
         # Update diet from checkboxes
         diet = []
@@ -414,7 +424,15 @@ class ConfigScreen:
                 True, (180, 180, 180)
             )
             self.screen.blit(summary_line2, (summary_x + 20, y + 38))
-            y += 75
+
+            # Add reproduction cooldown info (convert frames to seconds)
+            cooldown_sec = int(species_cfg['reproduction_cooldown'] / 60)
+            summary_line3 = self.font_small.render(
+                f"ReproCD:{cooldown_sec}s",
+                True, (180, 180, 180)
+            )
+            self.screen.blit(summary_line3, (summary_x + 20, y + 56))
+            y += 90
 
         # Draw population settings
         pop_x = 850

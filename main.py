@@ -99,6 +99,78 @@ def handle_agent_interactions(agents: List[Agent]) -> None:
             agent.learn_from(other)
 
 
+def handle_reproduction(agents: List[Agent], frame_count: int) -> List[Agent]:
+    """
+    Handle reproduction between agents.
+
+    Args:
+        agents: List of all agents
+        frame_count: Current frame count for debug logging
+
+    Returns:
+        List of newly born agents
+    """
+    new_agents = []
+    alive_agents = [a for a in agents if a.state != 'dead']
+
+    # Debug: Count reproduction attempts every 10 seconds
+    debug_mode = (frame_count % 600 == 0)
+
+    if debug_mode:
+        print(f"\n🔬 REPRODUCTION DEBUG (Frame {frame_count}):")
+        print(f"  Total alive agents: {len(alive_agents)}")
+
+        # Count by species
+        for species in ['Gorilla', 'Chimp', 'Bonobo']:
+            species_agents = [a for a in alive_agents if a.species == species]
+            can_reproduce_count = sum(1 for a in species_agents if a.can_reproduce())
+            print(f"  {species}: {len(species_agents)} alive, {can_reproduce_count} can reproduce")
+
+            # Show details for first agent of each species
+            if species_agents:
+                species_agents[0].can_reproduce(debug=True)
+
+    # Track which agents have already mated this cycle to avoid double-mating
+    mated_this_cycle = set()
+    reproduction_attempts = 0
+    no_mate_count = 0
+
+    for agent in alive_agents:
+        # Skip if already mated this cycle
+        if agent.id in mated_this_cycle:
+            continue
+
+        # Check if can reproduce
+        if agent.can_reproduce():
+            reproduction_attempts += 1
+
+            # Find a mate
+            mate = agent.find_mate([a for a in alive_agents if a.id not in mated_this_cycle])
+
+            if mate:
+                # Create offspring
+                child = agent.reproduce(mate)
+                new_agents.append(child)
+
+                # Log birth
+                print(f"👶 BIRTH | {child.species} #{child.id} | "
+                      f"Parents: #{agent.id} & #{mate.id} | "
+                      f"Position: ({child.position[0]:.0f}, {child.position[1]:.0f})")
+
+                # Mark both parents as mated this cycle
+                mated_this_cycle.add(agent.id)
+                mated_this_cycle.add(mate.id)
+            else:
+                no_mate_count += 1
+
+    if debug_mode and reproduction_attempts > 0:
+        print(f"  Reproduction attempts: {reproduction_attempts}")
+        print(f"  No mate found: {no_mate_count}")
+        print(f"  Successful births: {len(new_agents)}\n")
+
+    return new_agents
+
+
 def run_simulation(screen: pygame.Surface, clock: pygame.time.Clock) -> str:
     """
     Run the main simulation loop.
@@ -173,6 +245,11 @@ def run_simulation(screen: pygame.Surface, clock: pygame.time.Clock) -> str:
             if frame_count % 30 == 0:  # Check interactions every 30 frames for performance
                 handle_agent_interactions(agents)
 
+            # Handle reproduction
+            if frame_count % 60 == 0:  # Check reproduction every 60 frames (1 second)
+                new_agents = handle_reproduction(agents, frame_count)
+                agents.extend(new_agents)
+
             # Update statistics panel
             stats_panel.update(agents)
 
@@ -195,11 +272,6 @@ def run_simulation(screen: pygame.Surface, clock: pygame.time.Clock) -> str:
 
         # Draw selected agent popup
         ui.draw_selected_agent_popup(selected_agent)
-
-        # Draw restart hint
-        restart_font = pygame.font.Font(None, 20)
-        restart_text = restart_font.render("Press Ctrl+R to restart", True, (150, 150, 150))
-        screen.blit(restart_text, (config.MAP_WIDTH + 10, config.SCREEN_HEIGHT - 25))
 
         # Optional: Draw debug info
         # ui.draw_debug_info(agents)

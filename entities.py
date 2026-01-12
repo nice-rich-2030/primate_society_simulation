@@ -437,7 +437,12 @@ class Agent:
             'attacks': 0,         # Number of attacks
             'meals': 0,           # Number of times eaten
             'escapes': 0,         # Number of times fled
+            'offspring': 0,       # Number of children produced
         }
+
+        # Reproduction tracking
+        self.time_since_last_reproduction = 0  # Frames since last reproduction
+        self.total_offspring = 0  # Lifetime offspring count
 
     def _initialize_random_strategy_probs(self) -> None:
         """
@@ -525,6 +530,124 @@ class Agent:
         # Track communication
         self.stats['communications'] += 1
 
+    def can_reproduce(self, debug=False) -> bool:
+        """
+        Check if agent can reproduce.
+
+        Args:
+            debug: If True, print debug information
+
+        Returns:
+            True if agent meets all reproduction conditions
+        """
+        alive = self.state != 'dead'
+        mature = self.age > config.MIN_REPRODUCTION_AGE
+        has_energy = self.energy > self.max_energy * 0.4
+        has_hp = self.hp > self.max_hp * 0.4
+        cooldown_passed = self.time_since_last_reproduction > self.config['reproduction_cooldown']
+
+        if debug:
+            print(f"  🔍 {self.species} #{self.id} reproduce check:")
+            print(f"    - Alive: {alive} | Mature: {mature} (age={self.age:.0f}/{config.MIN_REPRODUCTION_AGE})")
+            print(f"    - Energy: {has_energy} ({self.energy:.0f}/{self.max_energy:.0f} = {self.energy/self.max_energy*100:.1f}%)")
+            print(f"    - HP: {has_hp} ({self.hp:.0f}/{self.max_hp:.0f} = {self.hp/self.max_hp*100:.1f}%)")
+            print(f"    - Cooldown: {cooldown_passed} (time={self.time_since_last_reproduction}/{self.config['reproduction_cooldown']})")
+
+        return alive and mature and has_energy and has_hp and cooldown_passed
+
+    def find_mate(self, other_agents: List['Agent']) -> Optional['Agent']:
+        """
+        Find a suitable mate from nearby agents.
+
+        Args:
+            other_agents: List of all other agents
+
+        Returns:
+            Suitable mate or None if not found
+        """
+        potential_mates = [
+            agent for agent in other_agents
+            if (agent.species == self.species and  # Same species
+                agent.id != self.id and  # Not self
+                agent.state != 'dead' and  # Alive
+                agent.can_reproduce() and  # Can reproduce
+                utils.distance(tuple(self.position), tuple(agent.position)) < config.MATING_RANGE)
+        ]
+
+        return random.choice(potential_mates) if potential_mates else None
+
+    def reproduce(self, mate: 'Agent') -> 'Agent':
+        """
+        Reproduce with a mate to create offspring.
+
+        Args:
+            mate: The other parent
+
+        Returns:
+            New Agent (offspring)
+        """
+        # Child position near parents
+        child_position = (
+            (self.position[0] + mate.position[0]) / 2 + random.uniform(-30, 30),
+            (self.position[1] + mate.position[1]) / 2 + random.uniform(-30, 30)
+        )
+
+        # Clamp to map boundaries
+        child_position = (
+            utils.clamp(child_position[0], 20, config.MAP_WIDTH - 20),
+            utils.clamp(child_position[1], 20, config.SCREEN_HEIGHT - 20)
+        )
+
+        # Create offspring
+        child = Agent(self.species, child_position)
+
+        # Inherit strategies from parents with mutation
+        for context in ['foraging', 'combat', 'flee']:
+            for strategy in child.strategy_probs[context]:
+                # Average parent probabilities
+                parent_avg = (
+                    self.strategy_probs[context][strategy] +
+                    mate.strategy_probs[context][strategy]
+                ) / 2
+
+                # Add mutation
+                mutation = random.uniform(-config.MUTATION_RATE, config.MUTATION_RATE)
+                child.strategy_probs[context][strategy] = max(0, parent_avg + mutation)
+
+            # Normalize to sum to 1.0
+            total = sum(child.strategy_probs[context].values())
+            if total > 0:
+                for strategy in child.strategy_probs[context]:
+                    child.strategy_probs[context][strategy] /= total
+
+        # Inherit hunger threshold with mutation
+        parent_avg_hunger = (self.hunger_threshold + mate.hunger_threshold) / 2
+        mutation = random.uniform(-0.1, 0.1)
+        child.hunger_threshold = utils.clamp(parent_avg_hunger + mutation, 0.2, 0.8)
+
+        # Re-pick strategies based on new probabilities
+        child.current_foraging_strategy = child.pick_strategy('foraging')
+        child.current_combat_strategy = child.pick_strategy('combat')
+        child.current_flee_strategy = child.pick_strategy('flee')
+
+        # Parents pay reproduction cost
+        self.energy -= self.max_energy * config.REPRODUCTION_ENERGY_COST
+        self.hp -= self.max_hp * config.REPRODUCTION_HP_COST
+        mate.energy -= mate.max_energy * config.REPRODUCTION_ENERGY_COST
+        mate.hp -= mate.max_hp * config.REPRODUCTION_HP_COST
+
+        # Reset reproduction timers
+        self.time_since_last_reproduction = 0
+        mate.time_since_last_reproduction = 0
+
+        # Update statistics
+        self.total_offspring += 1
+        mate.total_offspring += 1
+        self.stats['offspring'] += 1
+        mate.stats['offspring'] += 1
+
+        return child
+
     def move_towards(self, target: Tuple[float, float], speed_multiplier: float = 1.0) -> None:
         """
         Move towards a target position.
@@ -566,6 +689,9 @@ class Agent:
         self.age += config.AGE_INCREMENT
         self.energy -= config.METABOLISM_RATE
 
+        # Increment reproduction timer (in years, same as age)
+        self.time_since_last_reproduction += config.AGE_INCREMENT
+
         # HP degradation when energy is very low (starvation damage)
         if self.energy < self.max_energy * 0.2:  # Below 20% energy
             starvation_damage = 0.2  # HP loss per frame when starving
@@ -573,6 +699,20 @@ class Agent:
 
         # Death conditions
         if self.hp <= 0 or self.energy <= 0 or self.age >= self.config['max_age']:
+            # Determine cause of death
+            if self.hp <= 0:
+                cause = "HP depleted (combat/starvation)"
+            elif self.energy <= 0:
+                cause = "Energy depleted (starvation)"
+            else:
+                cause = "Old age"
+
+            # Log death
+            age_seconds = self.age / 60  # Convert frames to seconds
+            print(f"💀 DEATH | {self.species} #{self.id} | Age: {age_seconds:.1f}s | "
+                  f"Cause: {cause} | Offspring: {self.total_offspring} | "
+                  f"Meals: {self.stats['meals']} | Attacks: {self.stats['attacks']}")
+
             self.state = 'dead'
             return
 
