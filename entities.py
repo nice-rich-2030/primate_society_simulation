@@ -541,7 +541,7 @@ class Agent:
             True if agent meets all reproduction conditions
         """
         alive = self.state != 'dead'
-        mature = self.age > config.MIN_REPRODUCTION_AGE
+        mature = self.age > config.MIN_REPRODUCTION_AGE and self.age < config.MIN_REPRODUCTION_AGE + 10 #10年間だけ
         has_energy = self.energy > self.max_energy * 0.4
         has_hp = self.hp > self.max_hp * 0.4
         cooldown_passed = self.time_since_last_reproduction > self.config['reproduction_cooldown']
